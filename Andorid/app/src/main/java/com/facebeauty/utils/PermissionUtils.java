@@ -15,7 +15,6 @@ public class PermissionUtils {
      * 权限列表
      */
     private static String[] permissionList = new String[]{
-            Manifest.permission.CAMERA,
             Manifest.permission.WRITE_EXTERNAL_STORAGE,
             Manifest.permission.READ_PHONE_STATE
     };

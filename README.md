@@ -2,7 +2,7 @@
 
 ## 美颜和短视频
 
-美颜相关APP可以说是现在手机上的必备的软件，例如抖音，快手，拍出的“照骗”和视频不加美颜效果，估计没有人敢传到网上。很多人一直好奇美颜类APP是如何开发出来的。本文就大致讲一下在Android上如何实现实时大红唇效果。
+美颜相关APP可以说是现在手机上的必备的软件，例如抖音，快手，拍出的“照骗”和视频不加美颜效果，估计没有人敢传到网上。很多人一直好奇美颜类APP是如何开发出来的。本文就大致讲一下在Android上如何实现实时修改唇色效果。
 
 
 下图的红唇效果就是想实现的功能
@@ -56,7 +56,7 @@ Project中的build.gradle添加
 ```java
     dependencies {
         ...
-        implementation 'com.tengine.android:tenginekit:1.0.3'
+        implementation 'com.tengine.android:tenginekit:1.0.5'
         ...
     }
 ```
@@ -71,18 +71,31 @@ Project中的build.gradle添加
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
     <uses-permission android:name="android.permission.READ_PHONE_STATE"/>
-
-    <uses-permission android:name="android.permission.CAMERA"/>
-    <uses-permission android:name="android.permission.FLASHLIGHT" />
-
-    <uses-feature android:name = "android.hardware.camera" android:required="true"/>
-    <uses-feature android:name = "android.hardware.camera.autofocus" />
 ```
-
-摄像头相关,TengineKit初始化代码可以看这篇问题，都是重复性内容就不在这里写了
-
+相对于上篇用摄像头来做效果，本文用gif图来代替摄像头的输入的视频流，如果想用摄像头实现，可以参考：
 > 用开源212点人脸关键点实现Android人脸实时打码
 > https://zhuanlan.zhihu.com/p/161038093
+
+### 处理Gif传过来的图片流
+
+首先我们先初始化TengineKit:
+1. 选用normal处理模式
+2. 打开人脸检测和人脸关键点功能
+3. 设置图片流格式为RGBA
+4. 设置输入图片流的宽高，此处为gif图的预览宽高
+5. 设置输出图片流的宽高，此处为GifImageView的宽高，此处和gif一致，所以用gif图的宽高代替
+```java
+    com.tenginekit.Face.init(getBaseContext(),
+        AndroidConfig.create()
+                .setNormalMode()
+                .openFunc(AndroidConfig.Func.Detect)
+                .openFunc(AndroidConfig.Func.Landmark)
+                .setInputImageFormat(AndroidConfig.ImageFormat.RGBA)
+                .setInputImageSize(facingGif.getGifWidth(), facingGif.getGifHeight())
+                .setOutputImageSize(facingGif.getGifWidth(), facingGif.getGifHeight())
+    );
+```
+
 
 ### 通过关键点得到嘴唇的形状
 
@@ -150,26 +163,44 @@ Project中的build.gradle添加
 此代码来源于 https://github.com/DingProg/Makeup
 
 ### 渲染
-
+传过来的bitmap为RGB_565，需要转为标准的RGBA格式
 ```java
-    trackingOverlay.addCallback(new OverlayView.DrawCallback() {
+    facingGif.setOnFrameAvailable(new GifImageView.OnFrameAvailable() {
         @Override
-        public void drawCallback(final Canvas canvas) {
-            if(faceBitmap != null){
-                canvas.drawBitmap(faceBitmap, 0,0, null);
-            }
-            if(faceLandmarks != null){
-                for (int i = 0; i < faceLandmarks.size(); i++) {
-                    Path m_p = getMouthLandmarks(faceLandmarks.get(i));
-                    LipDraw.drawLipPerfect(canvas, m_p, Color.RED, 120);
-                    Rect r = faceLandmarks.get(i).getBoundingBox();
+        public Bitmap onFrameAvailable(Bitmap bitmap) {
+            // bitmap RGB_565
+
+            Bitmap out_bitmap = Bitmap.createBitmap(
+                    facingGif.getGifWidth(),
+                    facingGif.getGifHeight(),
+                    Bitmap.Config.ARGB_8888);
+
+            Canvas canvas = new Canvas(out_bitmap);
+
+            canvas.drawBitmap(bitmap, 0, 0, null);
+            bitmap.recycle();
+
+            byte[] bytes = bitmap2Bytes(out_bitmap);
+            Face.FaceDetect faceDetect = com.tenginekit.Face.detect(bytes);
+            if(faceDetect.getFaceCount() > 0){
+                faceLandmarks = faceDetect.landmark2d();
+                if(faceLandmarks != null){
+                    for (int i = 0; i < faceLandmarks.size(); i++) {
+                        Path m_p = getMouthLandmarks(faceLandmarks.get(i));
+                        LipDraw.drawLipPerfect(canvas, m_p, Color.WHITE, 100);
+                    }
                 }
             }
+            return out_bitmap;
         }
     });
 ```
 
-### 效果
+### 效果对比
+
+原图|结果
+:--:|:--:
+![demo](./imgs/TengineKitDemo3.gif "demo") | ![demo](./imgs/TengineKitDemo5.gif "demo")
 
 ## 建议
 
